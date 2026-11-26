@@ -30,13 +30,6 @@ def initialize_amendments(db):
             PRIMARY KEY (show_id, amendment_id),
             UNIQUE (show_id, cue_id)
         );
-        CREATE TABLE IF NOT EXISTS amendment_notices (
-            show_id TEXT NOT NULL,
-            amendment_id TEXT NOT NULL,
-            kind TEXT NOT NULL CHECK (kind IN ('replacement', 'erratum')),
-            PRIMARY KEY (show_id, amendment_id),
-            FOREIGN KEY (show_id, amendment_id) REFERENCES amendments(show_id, amendment_id)
-        );
         CREATE TABLE IF NOT EXISTS amendment_seats (
             show_id TEXT NOT NULL,
             amendment_id TEXT NOT NULL,
@@ -100,32 +93,14 @@ def _intake(db, show_id, amendment_id, cue_id, corrected_text, erratum_text):
     return get_amendment(db, show_id, amendment_id)
 
 
-def _notice(db, order):
-    key = (order.show_id, order.amendment_id)
-    previous = db.execute(
-        'SELECT kind FROM amendment_notices WHERE show_id = ? AND amendment_id = ?', key,
-    ).fetchone()
-    if previous is None:
-        issued = db.execute(
-            'SELECT 1 FROM dispatches WHERE show_id = ? AND position = ? LIMIT 1',
-            (order.show_id, order.origin.position),
-        ).fetchone()
-        kind = 'erratum' if issued is not None else 'replacement'
-        db.execute('INSERT INTO amendment_notices VALUES (?, ?, ?)', (*key, kind))
-    else:
-        kind = previous[0]
-    text = order.erratum_text if kind == 'erratum' else order.corrected_text
-    return AmendmentInstruction(order.show_id, order.amendment_id, order.origin, text, kind)
-
-
-def record_seat_evidence(db, order, seat, instruction, acceptance):
-    if acceptance.token is None:
-        return
+def record_seat_evidence(db, order, seat, acceptance):
     evidence = None
     if acceptance.receipt is not None:
         entry = acceptance.receipt.playback
         evidence = json.dumps({
-            'status': instruction.kind + '_played', 'original_seq': None, 'amendment_seq': entry.seq,
+            'status': acceptance.kind + '_played',
+            'original_seq': acceptance.original_seq,
+            'amendment_seq': entry.seq,
         })
 
     key = (order.show_id, order.amendment_id, seat)
@@ -145,8 +120,10 @@ def record_seat_evidence(db, order, seat, instruction, acceptance):
 def amend(db, store_for, show_id, amendment_id, cue_id, corrected_text, erratum_text):
     with control_write(db):
         order = _intake(db, show_id, amendment_id, cue_id, corrected_text, erratum_text)
-        instruction = _notice(db, order)
 
+    instruction = AmendmentInstruction(
+        order.show_id, order.amendment_id, order.origin, order.corrected_text, order.erratum_text,
+    )
     for seat, saved in order.seats.items():
         if saved['evidence'] is not None:
             continue
@@ -155,5 +132,5 @@ def amend(db, store_for, show_id, amendment_id, cue_id, corrected_text, erratum_
         except SeatUnavailable:
             continue
         with control_write(db):
-            record_seat_evidence(db, order, seat, instruction, acceptance)
+            record_seat_evidence(db, order, seat, acceptance)
     return get_amendment(db, show_id, amendment_id)

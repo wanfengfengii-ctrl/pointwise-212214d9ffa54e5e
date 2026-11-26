@@ -41,5 +41,18 @@ def check_playable(db, command):
         raise ApiError(409, 'command_already_played')
 
 
+def has_amendment_command(db, show_id, cue_id):
+    for (body,) in db.execute('SELECT body FROM commands'):
+        command = json.loads(body)
+        origin = command.get('origin') or {}
+        if (
+            command.get('show_id') == show_id
+            and origin.get('cue_id') == cue_id
+            and command.get('amendment_id') is not None
+        ):
+            return True
+    return False
+
+
 def mark_consumed(db, token):
     db.execute('UPDATE commands SET consumed = 1 WHERE token = ?', (token,))
