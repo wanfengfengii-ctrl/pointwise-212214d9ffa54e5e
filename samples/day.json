@@ -1,0 +1,15 @@
+{
+  "draft_id": "地质厅晨场稿",
+  "show_id": "地质厅晨场",
+  "seats": ["甲", "乙"],
+  "cues": [
+    {"cue_id": "C", "channel": "讲解", "start": 1, "duration": 2, "text": "标本采自北坡"},
+    {"cue_id": "D", "channel": "讲解", "start": 3, "duration": 1, "text": "请触摸模型边缘"}
+  ],
+  "amendment": {
+    "amendment_id": "M",
+    "cue_id": "C",
+    "corrected_text": "标本采自南坡",
+    "erratum_text": "更正，刚才的北坡应为南坡"
+  }
+}
